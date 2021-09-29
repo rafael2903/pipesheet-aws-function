@@ -1,16 +1,17 @@
 service: pipesheet
 
 frameworkVersion: '2'
+useDotenv: true
 
 provider:
   name: aws
-  runtime: nodejs12.x
+  runtime: nodejs14.x
   lambdaHashingVersion: '20201221'
   region: us-west-1
 
 functions:
-  hello:
-    handler: handler.hello
+  synchronize:
+    handler: handler.synchronize
     events:
       - http:
           path: /

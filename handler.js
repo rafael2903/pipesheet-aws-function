@@ -1,15 +1,188 @@
-"use strict";
+'use strict'
+require('dotenv').config()
 
-module.exports.hello = async (event) => {
-  return {
-    statusCode: 200,
-    body: JSON.stringify(
-      {
-        message: "Go Serverless v2.0! Your function executed successfully!",
-        input: event,
-      },
-      null,
-      2
+const {
+  getPhases,
+  getAllCardsPageInfo,
+  getAllCardsEdges,
+} = require('./queries')
+const { client } = require('./config/gql')
+const { fetchSpreadsheet } = require('./config/spreadsheet')
+
+function getFormattedCards(cards, dateFieldsLabels) {
+  const SECONDS_IN_A_DAY = 86400
+
+  return cards.map(({ node }) => ({
+    ['Id']: node.id,
+    ['Título']: node.title,
+    ['Fase atual']: node.current_phase.name,
+    ['Etiquetas']: node.labels.map((label) => label.name).join(','),
+    ['Responsáveis']: node.assignees.map((assignee) => assignee.name).join(','),
+    ['Criado em']: new Date(node.createdAt).toLocaleString('pt-BR'),
+    ['Atualizado em']: new Date(node.updated_at).toLocaleString('pt-BR'),
+    ['Data de vencimento do card']: new Date(node.due_date).toLocaleString(
+      'pt-BR'
     ),
-  };
-};
+    ...node.fields.reduce(
+      (accumulator, currentItem) => ({
+        ...accumulator,
+        [currentItem.name]: dateFieldsLabels.includes(currentItem.name)
+          ? currentItem.value
+          : currentItem.report_value,
+      }),
+      {}
+    ),
+    ...node.phases_history.reduce(
+      (accumulator, currentItem) => ({
+        ...accumulator,
+        [`Tempo total na fase ${currentItem.phase.name} (dias)`]: (
+          currentItem.duration / SECONDS_IN_A_DAY
+        )
+          .toFixed(6)
+          .replace('.', ','),
+        [`Primeira vez que entrou na fase ${currentItem.phase.name}`]: new Date(
+          currentItem.firstTimeIn
+        ).toLocaleString('pt-BR'),
+        [`Última vez que saiu da fase ${currentItem.phase.name}`]: new Date(
+          currentItem.lastTimeOut
+        ).toLocaleString('pt-BR'),
+      }),
+      {}
+    ),
+  }))
+}
+
+function getPipePhasesAndFields(pipe) {
+  const phases = pipe.phases
+  const phasesFields = phases
+    .map((phase) => phase.fields)
+    .reduce((accumulator, currentItem) => [...accumulator, ...currentItem])
+  const fields = [...pipe.start_form_fields, ...phasesFields]
+  return { phases, fields }
+}
+
+function getDateFieldsLabels(fields) {
+  return fields
+    .filter(
+      (field) =>
+        field.type === 'date' ||
+        field.type === 'datetime' ||
+        field.type === 'due_date'
+    )
+    .map((field) => field.label)
+}
+
+function getHeaders(phases, fields) {
+  const fieldsLabels = fields.map((field) => field.label)
+
+  const phasesHeaders = phases
+    .map((phase) => [
+      `Tempo total na fase ${phase.name} (dias)`,
+      `Primeira vez que entrou na fase ${phase.name}`,
+      `Última vez que saiu da fase ${phase.name}`,
+    ])
+    .reduce((accumulator, currentItem) => [...accumulator, ...currentItem])
+
+  const headers = [
+    'Id',
+    'Título',
+    'Fase atual',
+    'Etiquetas',
+    'Responsáveis',
+    'Criado em',
+    'Atualizado em',
+    'Data de vencimento do card',
+    ...fieldsLabels,
+    ...phasesHeaders,
+  ]
+
+  return headers
+}
+
+async function fetchAllCursors(pipeId) {
+  let cursors = []
+  let hasNextPage, endCursor
+
+  do {
+    const variables = endCursor ? { pipeId, after: endCursor } : { pipeId }
+    const response = await client.request(getAllCardsPageInfo, variables)
+    const { pageInfo } = response.allCards
+    hasNextPage = pageInfo.hasNextPage
+    endCursor = pageInfo.endCursor
+    cursors.push(endCursor)
+  } while (hasNextPage)
+
+  cursors.pop()
+  return cursors
+}
+
+async function fetchAllCards(cursors, pipeId) {
+  let requests = cursors.map((cursor) =>
+    client.request(getAllCardsEdges, { pipeId, after: cursor })
+  )
+  requests.push(client.request(getAllCardsEdges, { pipeId }))
+
+  const response = await Promise.all(requests)
+
+  const allCards = response.reduce(
+    (accumulator, currentItem) => [
+      ...accumulator,
+      ...currentItem.allCards.edges,
+    ],
+    []
+  )
+
+  return { allCards }
+}
+
+module.exports.synchronize = async (event) => {
+  const { id } = event
+
+  try {
+    // const { pipeId, spreadsheetId, sheetId } = await Integrations.find(id)
+    const pipeId = 581467
+    const spreadsheetId = '1BradceGk7g9PDAUFlX_9tUyiZm4AYLz0LWx35DWNokg'
+    const sheetId = 1405458362
+
+    const cursors = await fetchAllCursors(pipeId)
+    const { allCards } = await fetchAllCards(cursors, pipeId)
+
+    const { pipe } = await client.request(getPhases, { pipeId })
+
+    const { phases, fields } = getPipePhasesAndFields(pipe)
+    const dateFieldsLabels = getDateFieldsLabels(fields)
+    const headers = getHeaders(phases, fields)
+
+    const cards = getFormattedCards(allCards, dateFieldsLabels)
+
+    const spreadsheet = await fetchSpreadsheet(spreadsheetId)
+    const sheet = spreadsheet.sheetsById[sheetId]
+
+    if (sheet.columnCount < headers.length)
+      await sheet.resize({
+        rowCount: sheet.rowCount,
+        columnCount: headers.length,
+      })
+
+    if (sheet.rowCount < cards.length)
+      await sheet.resize({
+        rowCount: cards.length + 500,
+        columnCount: sheet.columnCount,
+      })
+
+    await sheet.clear()
+    await sheet.setHeaderRow(headers)
+    await sheet.addRows(cards)
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ message: 'Successfully synchronized' }),
+    }
+  } catch (error) {
+    console.log(error)
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ message: 'Error while synchronizing' }),
+    }
+  }
+}
