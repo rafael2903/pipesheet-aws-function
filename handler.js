@@ -136,13 +136,9 @@ async function fetchAllCards(cursors, pipeId) {
 }
 
 module.exports.synchronize = async (event) => {
-  const { id } = event
+  const { pipeId, spreadsheetId, sheetId } = event
 
   try {
-    // const { pipeId, spreadsheetId, sheetId } = await Integrations.find(id)
-    const pipeId = 581467
-    const spreadsheetId = '1BradceGk7g9PDAUFlX_9tUyiZm4AYLz0LWx35DWNokg'
-    const sheetId = 1405458362
 
     const cursors = await fetchAllCursors(pipeId)
     const { allCards } = await fetchAllCards(cursors, pipeId)
