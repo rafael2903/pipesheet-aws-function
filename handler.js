@@ -23,15 +23,15 @@ function getFormattedCards(cards, dateFieldsLabels) {
     ['Data de vencimento do card']: new Date(node.due_date).toLocaleString(
       'pt-BR'
     ),
-    ...node.fields.reduce(
-      (accumulator, currentItem) => ({
+    ...node.fields.reduce((accumulator, currentItem) => {
+      const fieldName = `${currentItem.name} (${currentItem.phase_field.phase.name})`
+      return {
         ...accumulator,
-        [currentItem.name]: dateFieldsLabels.includes(currentItem.name)
+        [fieldName]: dateFieldsLabels.includes(fieldName)
           ? currentItem.value
           : currentItem.report_value,
-      }),
-      {}
-    ),
+      }
+    }, {}),
     ...node.phases_history.reduce(
       (accumulator, currentItem) => ({
         ...accumulator,
@@ -54,10 +54,23 @@ function getFormattedCards(cards, dateFieldsLabels) {
 
 function getPipePhasesAndFields(pipe) {
   const phases = pipe.phases
+
   const phasesFields = phases
-    .map((phase) => phase.fields)
-    .reduce((accumulator, currentItem) => [...accumulator, ...currentItem])
-  const fields = [...pipe.start_form_fields, ...phasesFields]
+    .map((phase) =>
+      phase.fields.map((field) => ({
+        ...field,
+        label: `${field.label} (${phase.name})`,
+      }))
+    )
+    .flat()
+
+  const startFormFields = pipe.start_form_fields.map((field) => ({
+    ...field,
+    label: `${field.label} (Start form)`,
+  }))
+
+  const fields = [...startFormFields, ...phasesFields]
+
   return { phases, fields }
 }
 
@@ -139,7 +152,6 @@ module.exports.synchronize = async (event) => {
   const { pipeId, spreadsheetId, sheetId } = event
 
   try {
-
     const cursors = await fetchAllCursors(pipeId)
     const { allCards } = await fetchAllCards(cursors, pipeId)
 
@@ -178,7 +190,9 @@ module.exports.synchronize = async (event) => {
     console.log(error)
     return {
       statusCode: 500,
-      body: JSON.stringify({ message: 'Error while synchronizing' }),
+      body: JSON.stringify({
+        message: `Error while synchronizing: ${error.message}`,
+      }),
     }
   }
 }

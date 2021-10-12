@@ -41,6 +41,11 @@ const getAllCardsEdges = gql`
             name
             value
             report_value
+            phase_field {
+              phase {
+                name
+              }
+            }
           }
 
           phases_history {
