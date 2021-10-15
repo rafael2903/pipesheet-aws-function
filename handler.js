@@ -148,39 +148,46 @@ async function fetchAllCards(cursors, pipeId) {
   return { allCards }
 }
 
+async function synchronizeIntegration({ pipeId, spreadsheetId, sheetId }) {
+  const cursors = await fetchAllCursors(pipeId)
+  const { allCards } = await fetchAllCards(cursors, pipeId)
+
+  const { pipe } = await client.request(getPhases, { pipeId })
+
+  const { phases, fields } = getPipePhasesAndFields(pipe)
+  const dateFieldsLabels = getDateFieldsLabels(fields)
+  const headers = getHeaders(phases, fields)
+
+  const cards = getFormattedCards(allCards, dateFieldsLabels)
+
+  const spreadsheet = await fetchSpreadsheet(spreadsheetId)
+  const sheet = spreadsheet.sheetsById[sheetId]
+
+  if (sheet.columnCount < headers.length)
+    await sheet.resize({
+      rowCount: sheet.rowCount,
+      columnCount: headers.length,
+    })
+
+  if (sheet.rowCount < cards.length)
+    await sheet.resize({
+      rowCount: cards.length + 500,
+      columnCount: sheet.columnCount,
+    })
+
+  await sheet.clear()
+  await sheet.setHeaderRow(headers)
+  await sheet.addRows(cards)
+}
+
 module.exports.synchronize = async (event) => {
-  const { pipeId, spreadsheetId, sheetId } = event
+  const { integrations } = event
 
   try {
-    const cursors = await fetchAllCursors(pipeId)
-    const { allCards } = await fetchAllCards(cursors, pipeId)
-
-    const { pipe } = await client.request(getPhases, { pipeId })
-
-    const { phases, fields } = getPipePhasesAndFields(pipe)
-    const dateFieldsLabels = getDateFieldsLabels(fields)
-    const headers = getHeaders(phases, fields)
-
-    const cards = getFormattedCards(allCards, dateFieldsLabels)
-
-    const spreadsheet = await fetchSpreadsheet(spreadsheetId)
-    const sheet = spreadsheet.sheetsById[sheetId]
-
-    if (sheet.columnCount < headers.length)
-      await sheet.resize({
-        rowCount: sheet.rowCount,
-        columnCount: headers.length,
-      })
-
-    if (sheet.rowCount < cards.length)
-      await sheet.resize({
-        rowCount: cards.length + 500,
-        columnCount: sheet.columnCount,
-      })
-
-    await sheet.clear()
-    await sheet.setHeaderRow(headers)
-    await sheet.addRows(cards)
+    const synchronizations = integrations.map((integration) =>
+      synchronizeIntegration(integration)
+    )
+    await Promise.all(synchronizations)
 
     return {
       statusCode: 200,
