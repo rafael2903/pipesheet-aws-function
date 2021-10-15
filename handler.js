@@ -187,7 +187,7 @@ module.exports.synchronize = async (event) => {
     const synchronizations = integrations.map((integration) =>
       synchronizeIntegration(integration)
     )
-    await Promise.all(synchronizations)
+    await Promise.allSettled(synchronizations)
 
     return {
       statusCode: 200,
