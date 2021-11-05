@@ -1,4 +1,4 @@
-const { gql } = require("graphql-request");
+const { gql } = require('graphql-request')
 
 const getAllCardsPageInfo = gql`
   query ($pipeId: ID!, $after: String) {
@@ -9,7 +9,7 @@ const getAllCardsPageInfo = gql`
       }
     }
   }
-`;
+`
 
 const getAllCardsEdges = gql`
   query (
@@ -56,6 +56,11 @@ const getAllCardsEdges = gql`
             name
             value
             report_value
+            phase_field {
+              phase {
+                name
+              }
+            }
           }
 
           phases_history @include(if: $phasesHistory) {
@@ -71,7 +76,7 @@ const getAllCardsEdges = gql`
       }
     }
   }
-`;
+`
 
 const getPhases = gql`
   query (
@@ -94,5 +99,5 @@ const getPhases = gql`
       }
     }
   }
-`;
-module.exports = { getAllCardsPageInfo, getAllCardsEdges, getPhases };
+`
+module.exports = { getAllCardsPageInfo, getAllCardsEdges, getPhases }
