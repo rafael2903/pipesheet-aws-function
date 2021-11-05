@@ -194,7 +194,6 @@ async function synchronizeIntegration({
     startFormFields,
     phasesFormsFields,
   });
-  console.log({ pipe, columns });
 
   const { phases, fields } = getPipePhasesAndFields(pipe);
 
