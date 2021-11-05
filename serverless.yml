@@ -12,7 +12,3 @@ provider:
 functions:
   synchronize:
     handler: handler.synchronize
-    events:
-      - http:
-          path: /
-          method: get
