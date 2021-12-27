@@ -68,25 +68,18 @@ function getFormattedCards(cards, dateFieldsLabels) {
   }))
 }
 
-function getPipePhasesAndFields(pipe) {
-  const phases = pipe.phases || []
-
-  const phasesFields =
-    phases
-      ?.map(
-        (phase) =>
-          phase.fields?.map((field) => ({
-            ...field,
-            label: `${field.label} (${phase.name})`,
-          })) || []
-      )
-      .flat() || []
-
-  const startFormFields =
-    pipe.start_form_fields?.map((field) => ({
+function getPipePhasesAndFields({ phases = [], start_form_fields = [] }) {
+  const phasesFields = phases.flatMap(({ name: phaseName, fields = [] }) =>
+    fields.map((field) => ({
       ...field,
-      label: `${field.label} (Start form)`,
-    })) || []
+      label: `${field.label} (${phaseName})`,
+    }))
+  )
+
+  const startFormFields = start_form_fields.map((field) => ({
+    ...field,
+    label: `${field.label} (Start form)`,
+  }))
 
   const fields = [...startFormFields, ...phasesFields]
 
@@ -107,13 +100,11 @@ function getDateFieldsLabels(fields) {
 function getHeaders(phases, fields, columns) {
   const fieldsLabels = fields.map((field) => field.label)
 
-  const phasesHeaders = phases
-    .map((phase) => [
-      `Tempo total na fase ${phase.name} (dias)`,
-      `Primeira vez que entrou na fase ${phase.name}`,
-      `Última vez que saiu da fase ${phase.name}`,
-    ])
-    .flat()
+  const phasesHeaders = phases.flatMap((phase) => [
+    `Tempo total na fase ${phase.name} (dias)`,
+    `Primeira vez que entrou na fase ${phase.name}`,
+    `Última vez que saiu da fase ${phase.name}`,
+  ])
 
   let headers = []
 
