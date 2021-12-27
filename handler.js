@@ -116,8 +116,6 @@ function getHeaders(phases, fields, columns) {
   columns.createdAt && headers.push('Criado em')
   columns.updatedAt && headers.push('Atualizado em')
   columns.dueDate && headers.push('Data de vencimento do card')
-  columns.dueDate && headers.push('Data de vencimento do card')
-  columns.dueDate && headers.push('Data de vencimento do card')
   headers.push(...fieldsLabels)
   columns.phasesHistory && headers.push(...phasesHeaders)
 
